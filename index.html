@@ -402,7 +402,7 @@ const DEFAULT_CATS=[
   {id:'inc_etc_kr',name:'기타수입(KR)',country:'KR',type:'income',cur:'KRW'},
 ];
 
-const DEFAULT_SETTINGS={krwEur:1480,usdKrw:1370,deRentBiz:0,krRentBiz:0,fxAutoUpdate:true};
+const DEFAULT_SETTINGS={krwEur:1755,usdKrw:1543,deRentBiz:0,krRentBiz:0,fxAutoUpdate:true}; // 첫 실행·오프라인용 baseline (실행 시 ECB 실값으로 자동 갱신)
 
 /* ---------- 기본 저축 통 ---------- */
 const DEFAULT_POTS=[
@@ -469,24 +469,32 @@ async function fetchFx(manual){
   try{
     $('fxbar').textContent='환율 업데이트 중…';
     const r=await fetch('https://api.frankfurter.dev/v2/rates?base=EUR&quotes=KRW,USD');
-    if(!r.ok) throw new Error('http');
+    if(!r.ok) throw new Error('http '+r.status);
     const d=await r.json();
-    const krwEur=d.rates.KRW;
-    const usdKrw=d.rates.KRW/d.rates.USD; // 크로스 환율
-    const cache={date:todayISO(),ecbDate:d.date,krwEur,usdKrw};
+    // v2: [{base,quote,rate,date}] 배열  /  v1: {rates:{KRW,USD},date} 객체 — 둘 다 지원
+    let krwEur, usdKrw, ecbDate;
+    if(Array.isArray(d)){
+      const map={}; d.forEach(o=>{ map[o.quote]=o.rate; });
+      krwEur=map.KRW; usdKrw=map.KRW/map.USD; ecbDate=d[0]&&d[0].date;
+    }else if(d&&d.rates){
+      krwEur=d.rates.KRW; usdKrw=d.rates.KRW/d.rates.USD; ecbDate=d.date;
+    }
+    if(!krwEur||!usdKrw||!isFinite(krwEur)||!isFinite(usdKrw)) throw new Error('형식 오류');
+    const now=new Date();
+    const cache={date:todayISO(), ecbDate, fetchedAt:now.toLocaleString('ko-KR'), krwEur, usdKrw};
     localStorage.setItem(FX_KEY,JSON.stringify(cache));
     if(state.settings.fxAutoUpdate){
       state.settings.krwEur=krwEur; state.settings.usdKrw=usdKrw; save();
     }
     renderFxBar(cache);
     refreshSettings();
-    if(manual) toast('환율 업데이트 완료');
+    if(manual) toast(`환율 갱신: 1€=${fmtKRW(krwEur)} · $1=${fmtKRW(usdKrw)}`);
     renderAll();
   }catch(e){
-    // 오프라인: 마지막 저장값 조용히 사용
+    // 오프라인/실패: 마지막 저장값 조용히 사용
     let cache=null; try{cache=JSON.parse(localStorage.getItem(FX_KEY));}catch(_){}
     renderFxBar(cache,true);
-    if(manual) toast('오프라인 — 마지막 환율 사용');
+    if(manual) toast('환율 받기 실패 — 마지막/수동 값 사용 ('+(e.message||e)+')');
   }
 }
 function renderFxBar(cache,offline){
@@ -1000,8 +1008,8 @@ function refreshSettings(){
   $('setAuto').checked=s.fxAutoUpdate; $('setDeRent').value=s.deRentBiz; $('setKrRent').value=s.krRentBiz;
   let cache=null; try{cache=JSON.parse(localStorage.getItem(FX_KEY));}catch(e){}
   $('fxInfo').innerHTML = cache
-    ? `마지막 업데이트: <b>${cache.date}</b>${cache.ecbDate?` (ECB 기준일 ${cache.ecbDate})`:''} · 출처 Frankfurter / ECB`
-    : '아직 자동 업데이트 기록이 없습니다.';
+    ? `최근 갱신: <b>${cache.fetchedAt||cache.date}</b>${cache.ecbDate?` · ECB 기준일 <b>${cache.ecbDate}</b>`:''}<br>현재 적용: 1€=${fmtKRW(cache.krwEur)} · $1=${fmtKRW(cache.usdKrw)} · 출처 ECB(유럽중앙은행) 공식 기준환율, 평일 1회 고시`
+    : '아직 환율을 받아온 기록이 없습니다. "지금 업데이트"를 눌러보세요.';
   renderCatLists();
   renderPotManage();
   $('dataStat').textContent=`거래 ${state.transactions.length}건 · 카테고리 ${state.categories.length}개 · 저축 통 ${state.savingsPots.length}개`;
