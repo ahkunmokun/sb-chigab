@@ -298,10 +298,11 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       </div>
       <div id="syncLoggedIn" style="display:none">
         <p class="muted" style="margin:0 0 8px">로그인됨: <b id="syncWho"></b> · 변경 시 자동 동기화</p>
-        <div class="split">
+        <div class="split" style="margin-bottom:8px">
           <button class="btn sm" id="btnSyncNow" style="flex:2">🔄 지금 동기화</button>
           <button class="btn ghost sm" id="btnSyncLogout" style="flex:1">로그아웃</button>
         </div>
+        <button class="btn ghost sm" id="btnSyncPw" style="width:100%">🔑 비밀번호 변경</button>
       </div>
       <p class="hint" id="syncStatus" style="margin-top:8px"></p>
     </div>
@@ -1254,6 +1255,17 @@ async function syncLogin(){
 $('btnSyncLogin').onclick=syncLogin;
 $('btnSyncNow').onclick=pullSync;
 $('btnSyncLogout').onclick=async()=>{ if(sbClient){ await sbClient.auth.signOut(); sbSession=null; renderSyncUI(); setSyncStatus('로그아웃됨'); toast('로그아웃됨'); } };
+$('btnSyncPw').onclick=async()=>{
+  if(!sbClient||!sbSession){ toast('먼저 로그인하세요'); return; }
+  const n1=prompt('새 비밀번호 (6자 이상)'); if(n1===null) return;
+  if((n1||'').length<6){ toast('6자 이상으로 정하세요'); return; }
+  const n2=prompt('새 비밀번호 다시 입력'); if(n2===null) return;
+  if(n1!==n2){ toast('두 입력이 다릅니다'); return; }
+  setSyncStatus('비밀번호 변경 중…');
+  const {error}=await sbClient.auth.updateUser({password:n1});
+  if(error){ setSyncStatus('변경 실패: '+error.message); toast('변경 실패'); }
+  else{ setSyncStatus('✅ 비밀번호 변경됨 — 다른 기기는 새 비번으로 다시 로그인하세요'); toast('비밀번호 변경 완료'); }
+};
 
 /* ============================================================
    초기화
