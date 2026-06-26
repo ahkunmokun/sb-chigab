@@ -137,11 +137,11 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:100;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.show{opacity:.95}
 @media(min-width:560px){.summary{grid-template-columns:repeat(4,1fr)}}
-/* 저축/기부 토글 색 */
+/* 저금/기부 토글 색 */
 .toggle button.on-sav{background:#e0e7ff;color:#4338ca}
 .toggle button.on-don{background:#fce7f3;color:#be185d}
 @media(prefers-color-scheme:dark){.toggle button.on-sav{background:#1e1b4b;color:#a5b4fc}.toggle button.on-don{background:#3b0a28;color:#f9a8d4}}
-/* 저축 통 진행률 */
+/* 저금통 진행률 */
 .pot{margin:12px 0}
 .pot-head{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:5px;gap:8px}
 .pot-head b{font-size:14px}
@@ -183,9 +183,9 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
     <!-- 요약 -->
     <div class="summary" id="summary"></div>
 
-    <!-- 저축 통 진행률 -->
+    <!-- 저금통 진행률 -->
     <div class="card" id="savingsCard" style="display:none">
-      <h2>🐷 저축 통</h2>
+      <h2>🐷 저금통</h2>
       <div id="potProgress"></div>
     </div>
 
@@ -196,7 +196,7 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       <div class="toggle" id="typeToggle" style="margin:10px 0">
         <button data-type="expense" class="on-exp">지출</button>
         <button data-type="income">수입</button>
-        <button data-type="saving">저축</button>
+        <button data-type="saving">저금</button>
         <button data-type="donation">기부</button>
       </div>
       <div class="row c2">
@@ -211,8 +211,8 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       </div>
       <div class="row" id="catRow"><div class="field"><label>카테고리</label><select id="fCategory"></select></div></div>
       <div class="row c2" id="savingRow" style="display:none">
-        <div class="field"><label>구분</label><select id="fFlow"><option value="in">저축 입금 ↑</option><option value="out">저축 출금 ↓</option></select></div>
-        <div class="field"><label>저축 통</label><select id="fPot"></select></div>
+        <div class="field"><label>구분</label><select id="fFlow"><option value="in">저금 입금 ↑</option><option value="out">저금 출금 ↓</option></select></div>
+        <div class="field"><label>저금통</label><select id="fPot"></select></div>
       </div>
       <div class="row"><div class="field"><label id="fDescLabel">내용 · 거래처</label><input type="text" id="fDesc" placeholder="자유 입력 (예: REWE 장보기)"></div></div>
       <div class="row"><div class="field"><label>메모 (선택)</label><textarea id="fNote" placeholder="메모"></textarea></div></div>
@@ -233,7 +233,7 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       <h2>거래 목록</h2>
       <div class="filters">
         <select id="filMonth"></select>
-        <select id="filType"><option value="">전체 유형</option><option value="income">수입</option><option value="expense">지출</option><option value="saving">저축</option><option value="donation">기부</option></select>
+        <select id="filType"><option value="">전체 유형</option><option value="income">수입</option><option value="expense">지출</option><option value="saving">저금</option><option value="donation">기부</option></select>
         <select id="filCur"><option value="">전체 통화</option><option>EUR</option><option>KRW</option><option>USD</option></select>
         <select id="filCountry"><option value="">전체 국가</option><option value="DE">독일</option><option value="KR">한국</option></select>
       </div>
@@ -344,13 +344,13 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
     </div>
 
     <div class="card">
-      <h2>🐷 저축 통 관리</h2>
+      <h2>🐷 저금통 관리</h2>
       <div class="row c3">
         <div class="field"><input type="text" id="newPotName" placeholder="이름 (예: 세금대비)"></div>
         <div class="field"><select id="newPotCur"><option>EUR</option><option>KRW</option><option>USD</option></select></div>
         <div class="field"><input type="number" id="newPotTarget" inputmode="decimal" placeholder="목표 금액"></div>
       </div>
-      <button class="btn ghost sm" id="btnAddPot" style="width:100%;margin-bottom:12px">+ 저축 통 추가</button>
+      <button class="btn ghost sm" id="btnAddPot" style="width:100%;margin-bottom:12px">+ 저금통 추가</button>
       <div id="potManageList"></div>
     </div>
 
@@ -426,10 +426,11 @@ const DEFAULT_CATS=[
 
 const DEFAULT_SETTINGS={krwEur:1755,usdKrw:1543,deRentBiz:0,krRentBiz:0,fxAutoUpdate:true}; // 첫 실행·오프라인용 baseline (실행 시 ECB 실값으로 자동 갱신)
 
-/* ---------- 기본 저축 통 ---------- */
+/* ---------- 기본 저금통 ---------- */
 const DEFAULT_POTS=[
   {id:'pot_tax',name:'세금 대비',currency:'EUR',target:3000},
   {id:'pot_emer',name:'비상금',currency:'KRW',target:5000000},
+  {id:'pot_donation',name:'기부저금통',currency:'EUR',target:0},
 ];
 
 /* ---------- 상태 로드/저장 ---------- */
@@ -448,6 +449,23 @@ function load(){
 }
 function persistOnly(){ localStorage.setItem(LS_KEY,JSON.stringify(state)); }
 function save(){ state.rev=Date.now(); persistOnly(); scheduleSync(); }
+// 기존 데이터에 신규 항목 1회 자동 추가 (동기화 충돌 방지 위해 rev는 올리지 않음)
+function migrate(){
+  let changed=false;
+  if(!state.settings._donPotInit){
+    if(!state.savingsPots.some(p=>p.id==='pot_donation'))
+      state.savingsPots.push({id:'pot_donation',name:'기부저금통',currency:'EUR',target:0});
+    state.settings._donPotInit=true; changed=true;
+  }
+  if(!state.settings._foodCatInit){
+    if(!state.categories.some(c=>c.id==='food_de'))
+      state.categories.push({id:'food_de',name:'식료품(장보기·DE)',country:'DE',type:'expense',cur:'EUR'});
+    if(!state.categories.some(c=>c.id==='food_kr'))
+      state.categories.push({id:'food_kr',name:'식료품(장보기·KR)',country:'KR',type:'expense',cur:'KRW'});
+    state.settings._foodCatInit=true; changed=true;
+  }
+  if(changed) persistOnly();
+}
 
 /* ---------- 포맷 ---------- */
 const fmtEUR=n=>'€'+(n||0).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -464,7 +482,7 @@ function convert(t){
   return {krw, eur:krw/s.krwEur};
 }
 
-/* ---------- 저축 통 헬퍼 ---------- */
+/* ---------- 저금통 헬퍼 ---------- */
 function potById(id){ return state.savingsPots.find(p=>p.id===id); }
 function potName(id){ const p=potById(id); return p?p.name:'(삭제된 통)'; }
 function savingBalance(pot){
@@ -582,7 +600,7 @@ function fillCategories(){
 function fillPots(){
   const sel=$('fPot'); const cur=sel.value; sel.innerHTML='';
   if(!state.savingsPots.length){
-    const o=document.createElement('option'); o.value=''; o.textContent='— 설정에서 저축 통을 먼저 만드세요 —'; sel.appendChild(o); return;
+    const o=document.createElement('option'); o.value=''; o.textContent='— 설정에서 저금통을 먼저 만드세요 —'; sel.appendChild(o); return;
   }
   state.savingsPots.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.currency})`; sel.appendChild(o); });
   if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
@@ -623,7 +641,7 @@ $('btnSave').onclick=()=>{
     photo: attachedPhoto||undefined
   };
   if(formType==='saving'){
-    if(!$('fPot').value){ toast('먼저 설정에서 저축 통을 만드세요'); return; }
+    if(!$('fPot').value){ toast('먼저 설정에서 저금통을 만드세요'); return; }
     t.potId=$('fPot').value; t.flow=$('fFlow').value;
   }else if(formType==='donation'){
     // 별도 카테고리 없음 — 단체명은 desc, 국가는 통화로 자동 판단
@@ -648,7 +666,7 @@ function renderSummary(list){
   let eInc=0,eExp=0,kInc=0,kExp=0,netEur=0,donEur=0;
   list.forEach(t=>{
     const c=convert(t);
-    if(t.type==='saving') return;           // 저축은 내부 이동 — 손익 제외
+    if(t.type==='saving') return;           // 저금은 내부 이동 — 손익 제외
     if(t.type==='donation'){ donEur+=c.eur; return; } // 기부는 별도 집계
     if(t.type==='income'){ netEur+=c.eur; if(t.currency==='EUR') eInc+=c.eur; else kInc+=c.krw; }
     else { netEur-=c.eur; if(t.currency==='EUR') eExp+=c.eur; else kExp+=c.krw; }
@@ -659,7 +677,7 @@ function renderSummary(list){
     <div class="scard"><div class="lbl">EUR 지출</div><div class="val neg">${fmtEUR(eExp)}</div></div>
     <div class="scard"><div class="lbl">KRW 수입</div><div class="val pos">${fmtKRW(kInc)}</div></div>
     <div class="scard"><div class="lbl">KRW 지출</div><div class="val neg">${fmtKRW(kExp)}</div></div>
-    <div class="scard full"><div class="lbl">순이익 (EUR 환산, 저축·기부 제외)</div>
+    <div class="scard full"><div class="lbl">순이익 (EUR 환산, 저금·기부 제외)</div>
       <div class="val ${netEur>=0?'pos':'neg'}">${fmtEUR(netEur)}</div>
       <div class="sub">${fmtKRW(netEur*state.settings.krwEur)} · ${list.length}건${donEur>0?` · 🎁 기부 ${fmtEUR(donEur)}`:''}</div></div>`;
 }
@@ -1035,19 +1053,19 @@ function refreshSettings(){
     : '아직 환율을 받아온 기록이 없습니다. "지금 업데이트"를 눌러보세요.';
   renderCatLists();
   renderPotManage();
-  $('dataStat').textContent=`거래 ${state.transactions.length}건 · 카테고리 ${state.categories.length}개 · 저축 통 ${state.savingsPots.length}개`;
+  $('dataStat').textContent=`거래 ${state.transactions.length}건 · 카테고리 ${state.categories.length}개 · 저금통 ${state.savingsPots.length}개`;
 }
-/* 저축 통 관리 */
+/* 저금통 관리 */
 $('btnAddPot').onclick=()=>{
   const name=$('newPotName').value.trim(); if(!name){ toast('이름을 입력하세요'); return; }
   const target=parseFloat($('newPotTarget').value)||0;
   state.savingsPots.push({id:uid(),name,currency:$('newPotCur').value,target});
   $('newPotName').value=''; $('newPotTarget').value='';
-  save(); refreshSettings(); renderPots(); toast('저축 통 추가됨');
+  save(); refreshSettings(); renderPots(); toast('저금통 추가됨');
 };
 function renderPotManage(){
   const wrap=$('potManageList'); wrap.innerHTML='';
-  if(!state.savingsPots.length){ wrap.innerHTML='<p class="hint">저축 통이 없습니다. 위에서 추가하세요.</p>'; return; }
+  if(!state.savingsPots.length){ wrap.innerHTML='<p class="hint">저금통이 없습니다. 위에서 추가하세요.</p>'; return; }
   state.savingsPots.forEach(p=>{
     const bal=savingBalance(p);
     const el=document.createElement('div'); el.className='potmanage';
@@ -1063,7 +1081,7 @@ function renderPotManage(){
   wrap.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.del;
     if(state.transactions.some(t=>t.potId===id)){ toast('입출금 기록이 있는 통은 삭제 불가'); return; }
-    if(confirm('이 저축 통을 삭제할까요?')){ state.savingsPots=state.savingsPots.filter(p=>p.id!==id); save(); refreshSettings(); renderPots(); }
+    if(confirm('이 저금통을 삭제할까요?')){ state.savingsPots=state.savingsPots.filter(p=>p.id!==id); save(); refreshSettings(); renderPots(); }
   });
 }
 $('btnFxNow').onclick=()=>fetchFx(true);
@@ -1221,7 +1239,7 @@ async function pullSync(){
         state.settings={...DEFAULT_SETTINGS,...state.settings};
         state.categories=(state.categories&&state.categories.length)?state.categories:DEFAULT_CATS.slice();
         state.savingsPots=state.savingsPots||DEFAULT_POTS.slice();
-        persistOnly(); renderAll(); refreshSettings();
+        migrate(); persistOnly(); renderAll(); refreshSettings();
         setSyncStatus('⬇️ 다른 기기 내용으로 최신화됨 · '+new Date().toLocaleTimeString('ko-KR'));
       }else{
         pushSync(); // 로컬이 더 최신 → 올림
@@ -1270,6 +1288,7 @@ $('btnSyncPw').onclick=async()=>{
 /* ============================================================
    초기화
 ============================================================ */
+migrate();
 resetForm();
 renderAll();
 buildYearFilters();
