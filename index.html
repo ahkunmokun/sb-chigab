@@ -137,6 +137,19 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:100;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.show{opacity:.95}
 @media(min-width:560px){.summary{grid-template-columns:repeat(4,1fr)}}
+/* 저축/기부 토글 색 */
+.toggle button.on-sav{background:#e0e7ff;color:#4338ca}
+.toggle button.on-don{background:#fce7f3;color:#be185d}
+@media(prefers-color-scheme:dark){.toggle button.on-sav{background:#1e1b4b;color:#a5b4fc}.toggle button.on-don{background:#3b0a28;color:#f9a8d4}}
+/* 저축 통 진행률 */
+.pot{margin:12px 0}
+.pot-head{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:5px;gap:8px}
+.pot-head b{font-size:14px}
+.pot-head span{color:var(--muted);font-size:12px;text-align:right}
+.pot-bar{height:10px;background:var(--chip);border-radius:99px;overflow:hidden}
+.pot-bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;transition:width .35s}
+.potmanage{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+.lock-link{background:none;border:none;color:var(--accent);font-size:12px;text-decoration:underline;cursor:pointer;padding:2px 4px;width:auto}
 </style>
 </head>
 <body>
@@ -170,6 +183,12 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
     <!-- 요약 -->
     <div class="summary" id="summary"></div>
 
+    <!-- 저축 통 진행률 -->
+    <div class="card" id="savingsCard" style="display:none">
+      <h2>🐷 저축 통</h2>
+      <div id="potProgress"></div>
+    </div>
+
     <!-- 입력 폼 -->
     <div class="card" id="formCard" style="display:none">
       <div class="flex-between"><h2 style="margin:0" id="formTitle">거래 추가</h2>
@@ -177,6 +196,8 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       <div class="toggle" id="typeToggle" style="margin:10px 0">
         <button data-type="expense" class="on-exp">지출</button>
         <button data-type="income">수입</button>
+        <button data-type="saving">저축</button>
+        <button data-type="donation">기부</button>
       </div>
       <div class="row c2">
         <div class="field"><label>날짜</label><input type="date" id="fDate"></div>
@@ -188,9 +209,22 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
         <div class="field"><label>금액</label><input type="number" id="fAmount" inputmode="decimal" step="0.01" placeholder="0"></div>
         <div class="field" id="fxField" style="display:none"><label>환율 (1 USD = ₩)</label><input type="number" id="fFx" inputmode="decimal" placeholder="1370"></div>
       </div>
-      <div class="row"><div class="field"><label>카테고리</label><select id="fCategory"></select></div></div>
-      <div class="row"><div class="field"><label>내용 · 거래처</label><input type="text" id="fDesc" placeholder="자유 입력 (예: REWE 장보기)"></div></div>
+      <div class="row" id="catRow"><div class="field"><label>카테고리</label><select id="fCategory"></select></div></div>
+      <div class="row c2" id="savingRow" style="display:none">
+        <div class="field"><label>구분</label><select id="fFlow"><option value="in">저축 입금 ↑</option><option value="out">저축 출금 ↓</option></select></div>
+        <div class="field"><label>저축 통</label><select id="fPot"></select></div>
+      </div>
+      <div class="row"><div class="field"><label id="fDescLabel">내용 · 거래처</label><input type="text" id="fDesc" placeholder="자유 입력 (예: REWE 장보기)"></div></div>
       <div class="row"><div class="field"><label>메모 (선택)</label><textarea id="fNote" placeholder="메모"></textarea></div></div>
+      <div class="row"><div class="field">
+        <label>사진 첨부 (선택) — 영수증을 찍어 함께 보관</label>
+        <button class="btn ghost sm" id="btnAttach" style="width:100%">📎 사진 촬영 · 첨부</button>
+        <input type="file" id="attachInput" accept="image/*" capture="environment" style="display:none">
+        <div id="attachPreview" style="display:none;margin-top:8px;position:relative">
+          <img id="attachImg" style="width:100%;max-height:200px;object-fit:contain;border:1px solid var(--border);border-radius:10px;background:var(--card2)">
+          <button class="btn danger sm" id="btnAttachDel" style="width:auto;position:absolute;top:6px;right:6px">사진 제거</button>
+        </div>
+      </div></div>
       <button class="btn green" id="btnSave">저장</button>
     </div>
 
@@ -199,7 +233,7 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       <h2>거래 목록</h2>
       <div class="filters">
         <select id="filMonth"></select>
-        <select id="filType"><option value="">전체 유형</option><option value="income">수입</option><option value="expense">지출</option></select>
+        <select id="filType"><option value="">전체 유형</option><option value="income">수입</option><option value="expense">지출</option><option value="saving">저축</option><option value="donation">기부</option></select>
         <select id="filCur"><option value="">전체 통화</option><option>EUR</option><option>KRW</option><option>USD</option></select>
         <select id="filCountry"><option value="">전체 국가</option><option value="DE">독일</option><option value="KR">한국</option></select>
       </div>
@@ -240,6 +274,13 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       <h2>🇰🇷 한국 종합소득세 내역</h2>
       <div id="prevKR" class="muted"></div>
       <button class="btn sm" style="margin-top:10px;width:100%" id="csvKR">⬇️ 종합소득세 CSV 다운로드</button>
+    </div>
+
+    <div class="card">
+      <h2>🎁 기부금 내역 (Spenden / 기부금)</h2>
+      <div id="prevDON" class="muted"></div>
+      <p class="hint">독일 Spenden은 Sonderausgaben(특별지출), 한국 기부금은 세액공제 대상 — 사업 경비와 분리해 집계합니다.</p>
+      <button class="btn sm" style="margin-top:6px;width:100%" id="csvDON">⬇️ 기부금 CSV 다운로드</button>
     </div>
   </section>
 
@@ -282,6 +323,17 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
     </div>
 
     <div class="card">
+      <h2>🐷 저축 통 관리</h2>
+      <div class="row c3">
+        <div class="field"><input type="text" id="newPotName" placeholder="이름 (예: 세금대비)"></div>
+        <div class="field"><select id="newPotCur"><option>EUR</option><option>KRW</option><option>USD</option></select></div>
+        <div class="field"><input type="number" id="newPotTarget" inputmode="decimal" placeholder="목표 금액"></div>
+      </div>
+      <button class="btn ghost sm" id="btnAddPot" style="width:100%;margin-bottom:12px">+ 저축 통 추가</button>
+      <div id="potManageList"></div>
+    </div>
+
+    <div class="card">
       <h2>데이터 백업</h2>
       <div class="split" style="margin-bottom:8px">
         <button class="btn ghost sm" id="btnBackup">⬇️ 백업 (JSON)</button>
@@ -303,6 +355,12 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
 
 <div class="toast" id="toast"></div>
 
+<!-- 첨부 사진 전체보기 -->
+<div id="imgViewer" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:16px;flex-direction:column">
+  <img id="imgViewerImg" style="max-width:100%;max-height:86vh;object-fit:contain;border-radius:8px">
+  <button class="btn" id="imgViewerClose" style="width:auto;margin-top:14px">닫기</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 /* ============================================================
@@ -321,12 +379,14 @@ const DEFAULT_CATS=[
   {id:'ksk',name:'KSK',country:'DE',type:'expense',cur:'EUR'},
   {id:'strom_de',name:'전기세(DE)',country:'DE',type:'expense',cur:'EUR'},
   {id:'handy_de',name:'핸드폰(DE)',country:'DE',type:'expense',cur:'EUR'},
+  {id:'food_de',name:'식료품(장보기·DE)',country:'DE',type:'expense',cur:'EUR'},
   {id:'etc_de',name:'기타지출(DE)',country:'DE',type:'expense',cur:'EUR'},
   // 한국 지출
   {id:'rent_kr',name:'집세(KR)',country:'KR',type:'expense',cur:'KRW',rent:'kr'},
   {id:'health_kr',name:'건강보험',country:'KR',type:'expense',cur:'KRW'},
   {id:'handy_kr',name:'핸드폰(KR)',country:'KR',type:'expense',cur:'KRW'},
   {id:'strom_kr',name:'전기세(KR)',country:'KR',type:'expense',cur:'KRW'},
+  {id:'food_kr',name:'식료품(장보기·KR)',country:'KR',type:'expense',cur:'KRW'},
   {id:'millie',name:'밀리의서재',country:'KR',type:'expense',cur:'KRW'},
   {id:'claude_usd',name:'클로드구독(USD)',country:'KR',type:'expense',cur:'USD'},
   {id:'etc_kr',name:'기타지출(KR)',country:'KR',type:'expense',cur:'KRW'},
@@ -344,6 +404,12 @@ const DEFAULT_CATS=[
 
 const DEFAULT_SETTINGS={krwEur:1480,usdKrw:1370,deRentBiz:0,krRentBiz:0,fxAutoUpdate:true};
 
+/* ---------- 기본 저축 통 ---------- */
+const DEFAULT_POTS=[
+  {id:'pot_tax',name:'세금 대비',currency:'EUR',target:3000},
+  {id:'pot_emer',name:'비상금',currency:'KRW',target:5000000},
+];
+
 /* ---------- 상태 로드/저장 ---------- */
 let state=load();
 function load(){
@@ -352,10 +418,11 @@ function load(){
     if(raw&&raw.transactions){
       raw.settings={...DEFAULT_SETTINGS,...raw.settings};
       raw.categories=raw.categories&&raw.categories.length?raw.categories:DEFAULT_CATS.slice();
+      raw.savingsPots=raw.savingsPots||DEFAULT_POTS.slice();
       return raw;
     }
   }catch(e){}
-  return {transactions:[],settings:{...DEFAULT_SETTINGS},categories:DEFAULT_CATS.slice()};
+  return {transactions:[],settings:{...DEFAULT_SETTINGS},categories:DEFAULT_CATS.slice(),savingsPots:DEFAULT_POTS.slice()};
 }
 function save(){localStorage.setItem(LS_KEY,JSON.stringify(state));}
 
@@ -372,6 +439,14 @@ function convert(t){
   // USD
   const krw=t.amount*(t.fxRate||s.usdKrw);
   return {krw, eur:krw/s.krwEur};
+}
+
+/* ---------- 저축 통 헬퍼 ---------- */
+function potById(id){ return state.savingsPots.find(p=>p.id===id); }
+function potName(id){ const p=potById(id); return p?p.name:'(삭제된 통)'; }
+function savingBalance(pot){
+  return state.transactions.filter(t=>t.type==='saving'&&t.potId===pot.id)
+    .reduce((s,t)=> s + (t.flow==='out'? -t.amount : t.amount), 0);
 }
 
 /* ============================================================
@@ -447,12 +522,20 @@ $('btnManual').onclick=()=>{ resetForm(); openForm(); };
 $('btnCloseForm').onclick=()=>{ $('formCard').style.display='none'; };
 
 $('typeToggle').querySelectorAll('button').forEach(b=>b.onclick=()=>setType(b.dataset.type));
+const TYPE_CLASS={income:'on-inc',expense:'on-exp',saving:'on-sav',donation:'on-don'};
 function setType(t){
   formType=t;
-  const btns=$('typeToggle').querySelectorAll('button');
-  btns.forEach(b=>{b.classList.remove('on-inc','on-exp');
-    if(b.dataset.type===t) b.classList.add(t==='income'?'on-inc':'on-exp');});
-  fillCategories();
+  $('typeToggle').querySelectorAll('button').forEach(b=>{
+    b.classList.remove('on-inc','on-exp','on-sav','on-don');
+    if(b.dataset.type===t) b.classList.add(TYPE_CLASS[t]);
+  });
+  const isSav=t==='saving', isDon=t==='donation';
+  $('catRow').style.display=(isSav||isDon)?'none':'block';
+  $('savingRow').style.display=isSav?'grid':'none';
+  $('fDescLabel').textContent=isDon?'받는 곳 · 단체명':'내용 · 거래처';
+  $('fDesc').placeholder=isDon?'예: 국경없는의사회, 적십자, 후원처':'자유 입력 (예: REWE 장보기)';
+  if(isSav) fillPots(); else fillCategories();
+  if(isDon) onCurrencyChange();
 }
 function fillCategories(){
   const sel=$('fCategory'); const cur=sel.value;
@@ -465,6 +548,17 @@ function fillCategories(){
   if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
   onCategoryChange();
 }
+function fillPots(){
+  const sel=$('fPot'); const cur=sel.value; sel.innerHTML='';
+  if(!state.savingsPots.length){
+    const o=document.createElement('option'); o.value=''; o.textContent='— 설정에서 저축 통을 먼저 만드세요 —'; sel.appendChild(o); return;
+  }
+  state.savingsPots.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.currency})`; sel.appendChild(o); });
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  onPotChange();
+}
+$('fPot').onchange=onPotChange;
+function onPotChange(){ const p=potById($('fPot').value); if(p){ $('fCurrency').value=p.currency; onCurrencyChange(); } }
 $('fCategory').onchange=onCategoryChange;
 function onCategoryChange(){
   const c=state.categories.find(x=>x.id===$('fCategory').value);
@@ -476,10 +570,12 @@ function onCurrencyChange(){
   $('fxField').style.display=usd?'block':'none';
   if(usd&&!$('fFx').value) $('fFx').value=state.settings.usdKrw;
 }
+let attachedPhoto=null;   // 첨부된 사진(압축 dataURL)
 function resetForm(){
   $('fDate').value=todayISO(); $('fAmount').value=''; $('fDesc').value='';
   $('fNote').value=''; $('fFx').value=''; $('fCurrency').value='EUR';
   $('formTitle').textContent='거래 추가'; $('fCategory').dataset.raw='';
+  clearAttach();
   setType('expense'); onCurrencyChange();
 }
 $('btnSave').onclick=()=>{
@@ -488,13 +584,28 @@ $('btnSave').onclick=()=>{
   const cur=$('fCurrency').value;
   const t={
     id:uid(), date:$('fDate').value||todayISO(), type:formType, currency:cur,
-    amount:amount, categoryId:$('fCategory').value,
+    amount:amount,
     desc:$('fDesc').value.trim(), note:$('fNote').value.trim(),
     fxRate: cur==='USD'?(parseFloat($('fFx').value)||state.settings.usdKrw):null,
     createdAt:new Date().toISOString(),
-    scannedRawText: $('fCategory').dataset.raw||undefined
+    scannedRawText: $('fCategory').dataset.raw||undefined,
+    photo: attachedPhoto||undefined
   };
-  state.transactions.push(t); save();
+  if(formType==='saving'){
+    if(!$('fPot').value){ toast('먼저 설정에서 저축 통을 만드세요'); return; }
+    t.potId=$('fPot').value; t.flow=$('fFlow').value;
+  }else if(formType==='donation'){
+    // 별도 카테고리 없음 — 단체명은 desc, 국가는 통화로 자동 판단
+  }else{
+    t.categoryId=$('fCategory').value;
+  }
+  try{
+    state.transactions.push(t); save();
+  }catch(err){
+    state.transactions.pop();
+    toast('저장 용량 초과 — 사진을 빼고 다시 시도하세요');
+    return;
+  }
   $('formCard').style.display='none'; $('scanArea').classList.remove('show');
   renderAll(); toast('저장되었습니다');
 };
@@ -503,9 +614,11 @@ $('btnSave').onclick=()=>{
    요약 카드
 ============================================================ */
 function renderSummary(list){
-  let eInc=0,eExp=0,kInc=0,kExp=0,netEur=0;
+  let eInc=0,eExp=0,kInc=0,kExp=0,netEur=0,donEur=0;
   list.forEach(t=>{
     const c=convert(t);
+    if(t.type==='saving') return;           // 저축은 내부 이동 — 손익 제외
+    if(t.type==='donation'){ donEur+=c.eur; return; } // 기부는 별도 집계
     if(t.type==='income'){ netEur+=c.eur; if(t.currency==='EUR') eInc+=c.eur; else kInc+=c.krw; }
     else { netEur-=c.eur; if(t.currency==='EUR') eExp+=c.eur; else kExp+=c.krw; }
   });
@@ -515,9 +628,25 @@ function renderSummary(list){
     <div class="scard"><div class="lbl">EUR 지출</div><div class="val neg">${fmtEUR(eExp)}</div></div>
     <div class="scard"><div class="lbl">KRW 수입</div><div class="val pos">${fmtKRW(kInc)}</div></div>
     <div class="scard"><div class="lbl">KRW 지출</div><div class="val neg">${fmtKRW(kExp)}</div></div>
-    <div class="scard full"><div class="lbl">순이익 (EUR 환산)</div>
+    <div class="scard full"><div class="lbl">순이익 (EUR 환산, 저축·기부 제외)</div>
       <div class="val ${netEur>=0?'pos':'neg'}">${fmtEUR(netEur)}</div>
-      <div class="sub">${fmtKRW(netEur*state.settings.krwEur)} · ${list.length}건</div></div>`;
+      <div class="sub">${fmtKRW(netEur*state.settings.krwEur)} · ${list.length}건${donEur>0?` · 🎁 기부 ${fmtEUR(donEur)}`:''}</div></div>`;
+}
+function renderPots(){
+  const wrap=$('potProgress');
+  const hasSaving=state.transactions.some(t=>t.type==='saving');
+  if(!state.savingsPots.length && !hasSaving){ $('savingsCard').style.display='none'; return; }
+  $('savingsCard').style.display='block';
+  wrap.innerHTML='';
+  state.savingsPots.forEach(p=>{
+    const bal=savingBalance(p);
+    const pct=p.target>0?Math.min(100,Math.max(0,Math.round(bal/p.target*100))):0;
+    const div=document.createElement('div'); div.className='pot';
+    div.innerHTML=`<div class="pot-head"><b>${esc(p.name)}</b>
+      <span>${fmtNum(bal,p.currency)}${p.target>0?' / '+fmtNum(p.target,p.currency)+' · '+pct+'%':''}</span></div>
+      ${p.target>0?`<div class="pot-bar"><span style="width:${pct}%"></span></div>`:''}`;
+    wrap.appendChild(div);
+  });
 }
 
 /* ============================================================
@@ -531,13 +660,18 @@ function buildMonthFilter(){
 }
 function catCountry(id){ const c=state.categories.find(x=>x.id===id); return c?c.country:'BOTH'; }
 function catName(id){ const c=state.categories.find(x=>x.id===id); return c?c.name:'-'; }
+function txCountry(t){
+  if(t.type==='saving'){ const p=potById(t.potId); return p&&p.currency==='EUR'?'DE':'KR'; }
+  if(t.type==='donation') return t.currency==='EUR'?'DE':'KR';
+  return catCountry(t.categoryId);
+}
 function getFiltered(){
   const m=$('filMonth').value, ty=$('filType').value, cu=$('filCur').value, co=$('filCountry').value;
   return state.transactions.filter(t=>{
     if(m&&t.date.slice(0,7)!==m) return false;
     if(ty&&t.type!==ty) return false;
     if(cu&&t.currency!==cu) return false;
-    if(co){ const cc=catCountry(t.categoryId); if(cc!=='BOTH'&&cc!==co) return false; }
+    if(co){ const cc=txCountry(t); if(cc!=='BOTH'&&cc!==co) return false; }
     return true;
   }).sort((a,b)=> a.date<b.date?1:a.date>b.date?-1:(a.createdAt<b.createdAt?1:-1));
 }
@@ -549,21 +683,28 @@ function renderList(){
   $('txEmpty').style.display=list.length?'none':'block';
   list.forEach(t=>{
     const c=convert(t);
-    const sign=t.type==='income'?'+':'−';
-    const cls=t.type==='income'?'pos':'neg';
+    let sign,cls,label;
+    if(t.type==='saving'){ sign=t.flow==='out'?'−':'+'; cls=t.flow==='out'?'neg':'pos'; label='🐷 '+potName(t.potId)+(t.flow==='out'?' 출금':' 입금'); }
+    else if(t.type==='donation'){ sign='−'; cls='neg'; label='🎁 기부'; }
+    else { sign=t.type==='income'?'+':'−'; cls=t.type==='income'?'pos':'neg'; label=catName(t.categoryId); }
+    const photo = t.photo?`<button class="del" style="color:var(--accent)" data-photo="${t.id}" title="사진 보기">📷</button>`:'';
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td>${t.date.slice(5)}</td>
       <td class="tdesc" title="${esc(t.desc)}${t.note?' · '+esc(t.note):''}">${esc(t.desc||'-')}</td>
-      <td><span class="cat-pill">${esc(catName(t.categoryId))}</span></td>
+      <td><span class="cat-pill">${esc(label)}</span></td>
       <td>${t.currency}</td>
       <td class="${cls}">${sign}${fmtNum(t.amount,t.currency)}</td>
       <td>${fmtEUR(c.eur)}</td>
       <td>${fmtKRW(c.krw)}</td>
-      <td><button class="del" data-id="${t.id}">✕</button></td>`;
+      <td style="white-space:nowrap">${photo}<button class="del" data-id="${t.id}">✕</button></td>`;
     body.appendChild(tr);
   });
-  body.querySelectorAll('.del').forEach(b=>b.onclick=()=>{
+  body.querySelectorAll('[data-photo]').forEach(b=>b.onclick=()=>{
+    const t=state.transactions.find(x=>x.id===b.dataset.photo);
+    if(t&&t.photo) openImage(t.photo);
+  });
+  body.querySelectorAll('.del[data-id]').forEach(b=>b.onclick=()=>{
     if(confirm('이 거래를 삭제할까요?')){
       state.transactions=state.transactions.filter(x=>x.id!==b.dataset.id);
       save(); renderAll(); toast('삭제됨');
@@ -572,7 +713,7 @@ function renderList(){
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-function renderAll(){ buildMonthFilter(); renderList(); fillCategories(); renderFxBar(JSON.parse(localStorage.getItem(FX_KEY)||'null')); }
+function renderAll(){ buildMonthFilter(); renderList(); renderPots(); if(formType==='saving') fillPots(); else fillCategories(); renderFxBar(JSON.parse(localStorage.getItem(FX_KEY)||'null')); }
 
 /* ============================================================
    영수증 스캔 (Tesseract.js v5)
@@ -591,15 +732,46 @@ document.addEventListener('drop',e=>{
 
 async function ensureWorker(){
   if(workerReady) return worker;
-  setStatus('OCR 엔진 로딩 중… (한국어·독일어·영어)');
+  setStatus('OCR 엔진 로딩 중… (한국어·독일어·영어, 처음 한 번만)');
   worker=await Tesseract.createWorker(['kor','deu','eng'],1,{
     logger:m=>{
-      if(m.status==='recognizing text') setProgress(m.progress, '텍스트 인식 중… '+Math.round(m.progress*100)+'%');
+      if(m.status==='recognizing text') setProgress(0.4+m.progress*0.6, '텍스트 인식 중… '+Math.round(m.progress*100)+'%');
       else if(m.status) setStatus(statusKo(m.status));
     }
   });
+  try{ await worker.setParameters({ tessedit_pageseg_mode:'6', preserve_interword_spaces:'1' }); }catch(e){}
   workerReady=true;
   return worker;
+}
+// 영수증 사진 전처리: 축소 + 흑백 + 대비 강화 (인식률 개선)
+function preprocessImage(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1600;
+      let {width:w,height:h}=img;
+      const scale=Math.min(1, MAX/Math.max(w,h));
+      w=Math.round(w*scale); h=Math.round(h*scale);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const ctx=cv.getContext('2d',{willReadFrequently:true});
+      ctx.drawImage(img,0,0,w,h);
+      try{
+        const im=ctx.getImageData(0,0,w,h), d=im.data;
+        const C=1.35, I=128;   // 대비 계수
+        for(let i=0;i<d.length;i+=4){
+          let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];  // 그레이스케일
+          g=(g-I)*C+I;                                  // 대비 강화
+          g=g<0?0:g>255?255:g;
+          d[i]=d[i+1]=d[i+2]=g;
+        }
+        ctx.putImageData(im,0,0);
+      }catch(e){ /* CORS 등으로 실패하면 원본 사용 */ }
+      URL.revokeObjectURL(img.src);
+      resolve(cv);
+    };
+    img.onerror=()=>{ reject(new Error('이미지 로드 실패')); };
+    img.src=URL.createObjectURL(file);
+  });
 }
 function statusKo(s){
   const map={'loading tesseract core':'엔진 코어 로딩…','initializing tesseract':'초기화…','loading language traineddata':'언어 데이터 로딩…','initializing api':'준비 중…','recognizing text':'인식 중…'};
@@ -610,21 +782,21 @@ function setProgress(p,t){ $('progBar').style.width=Math.round(p*100)+'%'; if(t)
 
 async function runOCR(file){
   $('scanArea').classList.add('show');
-  $('parsedChips').innerHTML=''; setProgress(0,'이미지 준비 중…');
-  const url=URL.createObjectURL(file);
-  $('preview').src=url;
+  $('parsedChips').innerHTML=''; setProgress(0.05,'이미지 준비 중…');
   $('scanArea').scrollIntoView({behavior:'smooth',block:'start'});
   try{
+    const canvas=await preprocessImage(file);     // 전처리 (축소·흑백·대비)
+    $('preview').src=canvas.toDataURL('image/jpeg',0.7);
+    setProgress(0.2,'스캔 준비…');
     const w=await ensureWorker();
-    setProgress(0.05,'스캔 중…');
-    const {data}=await w.recognize(url);
-    URL.revokeObjectURL(url);             // 이미지 즉시 해제 (저장 안 함)
-    $('preview').src='';
+    setProgress(0.4,'스캔 중…');
+    const {data}=await w.recognize(canvas);
+    $('preview').src='';                  // 이미지 즉시 해제 (저장 안 함)
     const conf=data.confidence||0;
     setProgress(1, `완료 · 신뢰도 ${Math.round(conf)}%`);
     parseAndFill(data.text, conf);
   }catch(err){
-    setStatus('OCR 실패: '+err.message+' — 수동 입력해주세요');
+    setStatus('OCR 실패: '+(err.message||err)+' — 수동 입력해주세요');
     resetForm(); openForm();
   }
 }
@@ -638,6 +810,8 @@ const KEYWORD_MAP=[
   [/Millie|밀리/i,'millie'],
   [/Claude|Anthropic/i,'claude_usd'],
   [/Krankenkasse|건강보험|TK|AOK|Barmer/i,'health_kr'],
+  [/REWE|EDEKA|ALDI|LIDL|Kaufland|Penny|Netto|DM|Rossmann|Lebensmittel|Supermarkt/i,'food_de'],
+  [/이마트|홈플러스|롯데마트|GS25|CU세븐일레븐|마트|장보기|식료품/i,'food_kr'],
 ];
 function parseAndFill(text, conf){
   resetForm();
@@ -727,8 +901,8 @@ function rentRatio(t){
   if(c&&c.rent==='kr') return state.settings.krRentBiz/100;
   return 1;
 }
-function isDE(t){ const c=catCountry(t.categoryId); return c==='DE'||(c==='BOTH'&&t.currency==='EUR'); }
-function isKR(t){ const c=catCountry(t.categoryId); return c==='KR'||(c==='BOTH'&&t.currency!=='EUR'); }
+function isDE(t){ if(t.type==='saving'||t.type==='donation') return false; const c=catCountry(t.categoryId); return c==='DE'||(c==='BOTH'&&t.currency==='EUR'); }
+function isKR(t){ if(t.type==='saving'||t.type==='donation') return false; const c=catCountry(t.categoryId); return c==='KR'||(c==='BOTH'&&t.currency!=='EUR'); }
 
 function renderTax(){
   buildYearFilters();
@@ -745,6 +919,10 @@ function renderTax(){
   let ki=0,ke=0;
   kr.forEach(t=>{const k=convert(t).krw; if(t.type==='income')ki+=k; else ke+=k*rentRatio(t);});
   $('prevKR').innerHTML=`거래 ${kr.length}건 · 수입 <b class="pos">${fmtKRW(ki)}</b> · 지출 <b class="neg">${fmtKRW(ke)}</b> · 순익 <b>${fmtKRW(ki-ke)}</b>`;
+  // 기부 (Spenden / 기부금)
+  const don=tx.filter(t=>t.type==='donation');
+  let dde=0,dkr=0; don.forEach(t=>{ if(t.currency==='EUR') dde+=convert(t).eur; else dkr+=convert(t).krw; });
+  $('prevDON').innerHTML=`기부 ${don.length}건 · 🇩🇪 Spenden <b>${fmtEUR(dde)}</b> · 🇰🇷 기부금 <b>${fmtKRW(dkr)}</b>`;
 }
 
 function csvCell(v){ v=String(v==null?'':v); return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
@@ -802,6 +980,16 @@ $('csvKR').onclick=()=>{
   rows.push(['','','','순이익','','','',Math.round(ki-ke)]);
   downloadCSV(rows,`종합소득세_${y}.csv`,',');
 };
+$('csvDON').onclick=()=>{
+  const y=$('taxYear').value; const tx=yearTx().filter(t=>t.type==='donation');
+  const rows=[['날짜','받는곳·단체','통화','원본금액','EUR환산','KRW환산','메모']];
+  tx.forEach(t=>{ const c=convert(t); rows.push([t.date, t.desc, t.currency, t.amount, eu(c.eur), Math.round(c.krw), t.note]); });
+  let dde=0,dkr=0; tx.forEach(t=>{ if(t.currency==='EUR') dde+=convert(t).eur; else dkr+=convert(t).krw; });
+  rows.push([]);
+  rows.push(['','Spenden 합계 (EUR, Sonderausgaben)','','','',eu(dde)]);
+  rows.push(['','기부금 합계 (KRW, 세액공제)','','','','',Math.round(dkr)]);
+  downloadCSV(rows,`기부금_${y}.csv`,',');
+};
 
 /* ============================================================
    설정
@@ -815,7 +1003,37 @@ function refreshSettings(){
     ? `마지막 업데이트: <b>${cache.date}</b>${cache.ecbDate?` (ECB 기준일 ${cache.ecbDate})`:''} · 출처 Frankfurter / ECB`
     : '아직 자동 업데이트 기록이 없습니다.';
   renderCatLists();
-  $('dataStat').textContent=`거래 ${state.transactions.length}건 · 카테고리 ${state.categories.length}개`;
+  renderPotManage();
+  $('dataStat').textContent=`거래 ${state.transactions.length}건 · 카테고리 ${state.categories.length}개 · 저축 통 ${state.savingsPots.length}개`;
+}
+/* 저축 통 관리 */
+$('btnAddPot').onclick=()=>{
+  const name=$('newPotName').value.trim(); if(!name){ toast('이름을 입력하세요'); return; }
+  const target=parseFloat($('newPotTarget').value)||0;
+  state.savingsPots.push({id:uid(),name,currency:$('newPotCur').value,target});
+  $('newPotName').value=''; $('newPotTarget').value='';
+  save(); refreshSettings(); renderPots(); toast('저축 통 추가됨');
+};
+function renderPotManage(){
+  const wrap=$('potManageList'); wrap.innerHTML='';
+  if(!state.savingsPots.length){ wrap.innerHTML='<p class="hint">저축 통이 없습니다. 위에서 추가하세요.</p>'; return; }
+  state.savingsPots.forEach(p=>{
+    const bal=savingBalance(p);
+    const el=document.createElement('div'); el.className='potmanage';
+    el.innerHTML=`<span><b>${esc(p.name)}</b> · ${p.currency}<br><span class="muted">현재 ${fmtNum(bal,p.currency)} / 목표 ${fmtNum(p.target||0,p.currency)}</span></span>
+      <span style="white-space:nowrap"><button class="lock-link" data-edit="${p.id}">목표수정</button> <span class="x" data-del="${p.id}" style="color:var(--red);cursor:pointer;font-weight:700">✕</span></span>`;
+    wrap.appendChild(el);
+  });
+  wrap.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{
+    const p=potById(b.dataset.edit); if(!p) return;
+    const v=prompt(`"${p.name}" 목표 금액 (${p.currency})`, p.target||0); if(v===null) return;
+    p.target=parseFloat(v)||0; save(); refreshSettings(); renderPots(); toast('목표 수정됨');
+  });
+  wrap.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.del;
+    if(state.transactions.some(t=>t.potId===id)){ toast('입출금 기록이 있는 통은 삭제 불가'); return; }
+    if(confirm('이 저축 통을 삭제할까요?')){ state.savingsPots=state.savingsPots.filter(p=>p.id!==id); save(); refreshSettings(); renderPots(); }
+  });
 }
 $('btnFxNow').onclick=()=>fetchFx(true);
 $('btnFxSave').onclick=()=>{
@@ -868,7 +1086,8 @@ $('restoreInput').onchange=e=>{
       if(!d.transactions) throw new Error('형식 오류');
       if(confirm('현재 데이터를 덮어쓸까요?')){
         state={transactions:d.transactions||[],settings:{...DEFAULT_SETTINGS,...d.settings},
-          categories:(d.categories&&d.categories.length)?d.categories:DEFAULT_CATS.slice()};
+          categories:(d.categories&&d.categories.length)?d.categories:DEFAULT_CATS.slice(),
+          savingsPots:(d.savingsPots&&d.savingsPots.length)?d.savingsPots:DEFAULT_POTS.slice()};
         save(); renderAll(); refreshSettings(); toast('복원 완료');
       }
     }catch(err){ toast('불러오기 실패: '+err.message); }
@@ -878,10 +1097,46 @@ $('restoreInput').onchange=e=>{
 $('btnWipe').onclick=()=>{
   if(confirm('모든 거래·설정을 삭제합니다. 계속할까요?') && confirm('정말 전체 삭제할까요? 되돌릴 수 없습니다.')){
     localStorage.removeItem(LS_KEY);
-    state={transactions:[],settings:{...DEFAULT_SETTINGS},categories:DEFAULT_CATS.slice()};
+    state={transactions:[],settings:{...DEFAULT_SETTINGS},categories:DEFAULT_CATS.slice(),savingsPots:DEFAULT_POTS.slice()};
     save(); renderAll(); refreshSettings(); toast('전체 삭제됨');
   }
 };
+
+/* ============================================================
+   사진 첨부 (메모용) — 압축 후 거래에 함께 저장
+============================================================ */
+$('btnAttach').onclick=()=>$('attachInput').click();
+$('attachInput').onchange=e=>{ const f=e.target.files[0]; if(f) attachPhoto(f); e.target.value=''; };
+$('btnAttachDel').onclick=clearAttach;
+function clearAttach(){ attachedPhoto=null; $('attachPreview').style.display='none'; $('attachImg').src=''; }
+async function attachPhoto(file){
+  try{
+    const canvas=await preprocessForStore(file);
+    attachedPhoto=canvas.toDataURL('image/jpeg',0.6);
+    $('attachImg').src=attachedPhoto;
+    $('attachPreview').style.display='block';
+    const kb=Math.round(attachedPhoto.length*0.73/1024);
+    toast(`사진 첨부됨 (약 ${kb}KB)`);
+  }catch(err){ toast('사진 첨부 실패'); }
+}
+// 저장용 압축: 컬러 유지, 최대 1000px
+function preprocessForStore(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1000; let {width:w,height:h}=img;
+      const scale=Math.min(1,MAX/Math.max(w,h));
+      w=Math.round(w*scale); h=Math.round(h*scale);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(img.src); resolve(cv);
+    };
+    img.onerror=()=>reject(new Error('load')); img.src=URL.createObjectURL(file);
+  });
+}
+function openImage(src){ $('imgViewerImg').src=src; $('imgViewer').style.display='flex'; }
+$('imgViewerClose').onclick=()=>{ $('imgViewer').style.display='none'; $('imgViewerImg').src=''; };
+$('imgViewer').onclick=e=>{ if(e.target.id==='imgViewer') $('imgViewerClose').onclick(); };
 
 /* ---------- 토스트 ---------- */
 let toastT=null;
