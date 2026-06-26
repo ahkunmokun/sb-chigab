@@ -180,6 +180,7 @@ hr.sep{border:none;border-top:1px solid var(--border);margin:14px 0}
       <div class="progress"><span id="progBar"></span></div>
       <div class="scan-status" id="scanStatus">대기 중…</div>
       <div id="parsedChips"></div>
+      <button class="btn ghost sm" id="btnOcrToNote" style="display:none;margin-top:10px;width:100%">📋 인식한 글자 전체를 메모에 넣기</button>
     </div>
 
     <!-- 요약 -->
@@ -626,23 +627,49 @@ function onCurrencyChange(){
   if(usd&&!$('fFx').value) $('fFx').value=state.settings.usdKrw;
 }
 let attachedPhoto=null;   // 첨부된 사진(압축 dataURL)
+let editingId=null;       // 수정 중인 거래 id (null이면 새 거래 추가)
+let lastOcrText='';       // 직전 OCR로 인식한 전체 텍스트 (메모 삽입용)
 function resetForm(){
+  editingId=null; lastOcrText=''; $('btnOcrToNote').style.display='none';
   $('fDate').value=todayISO(); $('fAmount').value=''; $('fDesc').value='';
   $('fNote').value=''; $('fFx').value=''; $('fCurrency').value='EUR';
   $('formTitle').textContent='거래 추가'; $('fCategory').dataset.raw='';
   clearAttach();
   setType('expense'); onCurrencyChange();
 }
+function openEdit(id){
+  const t=state.transactions.find(x=>x.id===id);
+  if(!t) return;
+  resetForm();
+  editingId=id;
+  $('formTitle').textContent='거래 수정';
+  setType(t.type);
+  $('fDate').value=t.date;
+  $('fAmount').value=t.amount;
+  $('fDesc').value=t.desc||'';
+  $('fNote').value=t.note||'';
+  $('fCategory').dataset.raw=t.scannedRawText||'';
+  if(t.type==='saving'){ if(t.potId) $('fPot').value=t.potId; $('fFlow').value=t.flow||'in'; }
+  else if(t.type!=='donation'){ if(t.categoryId) $('fCategory').value=t.categoryId; }
+  // 통화는 카테고리·저금통 자동설정 이후 원래 값으로 강제 복원
+  $('fCurrency').value=t.currency;
+  if(t.currency==='USD') $('fFx').value=t.fxRate||state.settings.usdKrw;
+  onCurrencyChange();
+  if(t.photo){ attachedPhoto=t.photo; $('attachImg').src=t.photo; $('attachPreview').style.display='block'; }
+  $('formCard').style.display='block';
+  $('formCard').scrollIntoView({behavior:'smooth',block:'center'});
+}
 $('btnSave').onclick=()=>{
   const amount=parseFloat($('fAmount').value);
   if(!amount||amount<=0){ toast('금액을 입력하세요'); return; }
   const cur=$('fCurrency').value;
+  const editing = editingId ? state.transactions.find(x=>x.id===editingId) : null;
   const t={
-    id:uid(), date:$('fDate').value||todayISO(), type:formType, currency:cur,
+    id: editing?editing.id:uid(), date:$('fDate').value||todayISO(), type:formType, currency:cur,
     amount:amount,
     desc:$('fDesc').value.trim(), note:$('fNote').value.trim(),
     fxRate: cur==='USD'?(parseFloat($('fFx').value)||state.settings.usdKrw):null,
-    createdAt:new Date().toISOString(),
+    createdAt: editing?editing.createdAt:new Date().toISOString(),
     scannedRawText: $('fCategory').dataset.raw||undefined,
     photo: attachedPhoto||undefined
   };
@@ -654,15 +681,18 @@ $('btnSave').onclick=()=>{
   }else{
     t.categoryId=$('fCategory').value;
   }
-  try{
-    state.transactions.push(t); save();
-  }catch(err){
-    state.transactions.pop();
-    toast('저장 용량 초과 — 사진을 빼고 다시 시도하세요');
-    return;
+  if(editing){
+    const idx=state.transactions.indexOf(editing);
+    state.transactions[idx]=t;
+    try{ save(); }
+    catch(err){ state.transactions[idx]=editing; toast('저장 용량 초과 — 사진을 빼고 다시 시도하세요'); return; }
+  }else{
+    try{ state.transactions.push(t); save(); }
+    catch(err){ state.transactions.pop(); toast('저장 용량 초과 — 사진을 빼고 다시 시도하세요'); return; }
   }
+  editingId=null;
   $('formCard').style.display='none'; $('scanArea').classList.remove('show');
-  renderAll(); toast('저장되었습니다');
+  renderAll(); toast(editing?'수정되었습니다':'저장되었습니다');
 };
 
 /* ============================================================
@@ -752,13 +782,14 @@ function renderList(){
       <td class="${cls}">${sign}${fmtNum(t.amount,t.currency)}</td>
       <td>${fmtEUR(c.eur)}</td>
       <td>${fmtKRW(c.krw)}</td>
-      <td style="white-space:nowrap">${photo}<button class="del" data-id="${t.id}">✕</button></td>`;
+      <td style="white-space:nowrap">${photo}<button class="del" style="color:var(--accent)" data-edit="${t.id}" title="수정">✎</button><button class="del" data-id="${t.id}" title="삭제">✕</button></td>`;
     body.appendChild(tr);
   });
   body.querySelectorAll('[data-photo]').forEach(b=>b.onclick=()=>{
     const t=state.transactions.find(x=>x.id===b.dataset.photo);
     if(t&&t.photo) openImage(t.photo);
   });
+  body.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
   body.querySelectorAll('.del[data-id]').forEach(b=>b.onclick=()=>{
     if(confirm('이 거래를 삭제할까요?')){
       state.transactions=state.transactions.filter(x=>x.id!==b.dataset.id);
@@ -776,6 +807,13 @@ function renderAll(){ buildMonthFilter(); renderList(); renderPots(); if(formTyp
 let worker=null, workerReady=false;
 $('btnScan').onclick=()=>$('fileInput').click();
 $('btnScanGallery').onclick=()=>$('fileInputGallery').click();
+$('btnOcrToNote').onclick=()=>{
+  if(!lastOcrText){ toast('인식한 글자가 없습니다'); return; }
+  const cur=$('fNote').value.trim();
+  $('fNote').value = cur ? cur+'\n'+lastOcrText : lastOcrText;
+  $('fNote').scrollIntoView({behavior:'smooth',block:'center'});
+  toast('인식한 글자를 메모에 넣었습니다');
+};
 $('btnRescan').onclick=()=>$('fileInput').click();
 $('fileInput').onchange=e=>{ const f=e.target.files[0]; if(f) runOCR(f); e.target.value=''; };
 $('fileInputGallery').onchange=e=>{ const f=e.target.files[0]; if(f) runOCR(f); e.target.value=''; };
@@ -899,6 +937,9 @@ function parseAndFill(text, conf){
   const firstLine=(t.split('\n').map(s=>s.trim()).filter(s=>s.length>2)[0]||'').slice(0,40);
   if(firstLine) $('fDesc').value=firstLine;
   $('fCategory').dataset.raw=text.slice(0,500);
+  // 인식한 전체 텍스트 보관 — "메모에 넣기" 버튼에서 사용
+  lastOcrText=text.split('\n').map(s=>s.trim()).filter(Boolean).join('\n');
+  $('btnOcrToNote').style.display=lastOcrText?'block':'none';
 
   // 칩 표시
   const chips=[];
